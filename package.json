@@ -1,0 +1,43 @@
+{
+  "name": "@boardmeister/marshal",
+  "version": "0.0.1",
+  "description": "Module responsible for application setup",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:Board-Meister/marshal.git"
+  },
+  "keywords": [
+    "nodejs",
+    "package"
+  ],
+  "author": "",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/Board-Meister/marshal/issues"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-jss": "^10.10.0"
+  },
+  "homepage": "https://github.com/Board-Meister/marshal#readme",
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-react": "^7.34.1",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.6",
+    "typescript": "^5.4.5"
+  }
+}
