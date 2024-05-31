@@ -10,12 +10,11 @@ export interface RegisterConfig {
     tags?: string[];
     requires?: string[];
     lazy?: boolean;
+    asset?: {
+        src: string;
+    };
 }
-export declare class Module {
-    ['constructor']: typeof Module;
-    constructor();
-    [key: string]: unknown;
-}
+export type Module = Record<string, unknown>;
 interface IModuleImportObject {
     default?: Module;
 }
@@ -38,11 +37,13 @@ export default class Marshal {
     registered: Record<string, RegisterConfig>;
     loaded: Record<string, object>;
     tagMap: Record<string, IModuleImport[]>;
+    instanceMap: WeakMap<Module, RegisterConfig>;
     register(config: RegisterConfig): void;
     getModuleConstraint(config: RegisterConfig): string;
     load(): Promise<void>;
     tagModules(moduleImport: IModuleImport): void;
     instantiateModule(moduleImport: IModuleImport): Module;
+    mapInstance(config: RegisterConfig, module: Module): void;
     loadDependencies(module: Module, config: RegisterConfig): Record<string, object> | undefined | false;
     isESClass(fn: unknown): boolean;
     generateLoadGroups(): Promise<IModuleImport>[];

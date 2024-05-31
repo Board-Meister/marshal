@@ -3,6 +3,7 @@ export default class Marshal {
         this.registered = {};
         this.loaded = {};
         this.tagMap = {};
+        this.instanceMap = new WeakMap();
     }
     register(config) {
         this.registered[this.getModuleConstraint(config)] = config;
@@ -12,10 +13,8 @@ export default class Marshal {
     }
     async load() {
         const modules = await Promise.all(this.generateLoadGroups());
-        console.log('modules', modules);
         modules.forEach(this.tagModules.bind(this));
         modules.forEach(this.instantiateModule.bind(this));
-        console.log('loaded', this.loaded);
     }
     tagModules(moduleImport) {
         (moduleImport.config.tags ?? []).forEach(tag => {
@@ -27,21 +26,25 @@ export default class Marshal {
     }
     instantiateModule(moduleImport) {
         const { module, config } = moduleImport;
-        console.log(this.getModuleConstraint(config), module, typeof module);
         if (typeof module == 'function' || !module.default || !this.isESClass(module.default)) {
-            this.loaded[this.getModuleConstraint(config)] = module;
+            this.mapInstance(config, module);
             return module;
         }
         const injectList = this.loadDependencies(module.default, config);
         if (false === injectList) {
+            this.mapInstance(config, module);
             return module;
         }
         // @ts-expect-error TS2351 "This expression is not constructable"
         // TS has issues with dynamically loaded generic classes which is normal (I think)
         const instance = injectList ? new module.default(injectList) : new module.default;
+        this.mapInstance(config, instance);
         typeof instance.exec == 'function' && instance.exec();
-        this.loaded[this.getModuleConstraint(config)] = instance;
         return instance;
+    }
+    mapInstance(config, module) {
+        this.loaded[this.getModuleConstraint(config)] = module;
+        this.instanceMap.set(module, config);
     }
     loadDependencies(module, config) {
         if (typeof module.inject != 'function') {

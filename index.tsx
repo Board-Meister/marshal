@@ -12,13 +12,12 @@ export interface RegisterConfig {
   tags?: string[];
   requires?: string[];
   lazy?: boolean;
+  asset?: {
+    src: string;
+  }
 }
 
-export declare class Module {
-  ['constructor']: typeof Module;
-  constructor();
-  [key: string]: unknown;
-}
+export type Module = Record<string, unknown>;
 
 interface IModuleImportObject {
   default?: Module;
@@ -49,6 +48,7 @@ export default class Marshal {
   registered: Record<string, RegisterConfig> = {};
   loaded: Record<string, object> = {};
   tagMap: Record<string, IModuleImport[]> = {};
+  instanceMap = new WeakMap<Module, RegisterConfig>();
 
   register(config: RegisterConfig): void {
     this.registered[this.getModuleConstraint(config)] = config;
@@ -60,11 +60,8 @@ export default class Marshal {
 
   async load(): Promise<void> {
     const modules = await Promise.all<IModuleImport>(this.generateLoadGroups());
-    console.log('modules', modules)
     modules.forEach(this.tagModules.bind(this));
     modules.forEach(this.instantiateModule.bind(this));
-
-    console.log('loaded', this.loaded)
   }
 
   tagModules(moduleImport: IModuleImport): void {
@@ -79,24 +76,29 @@ export default class Marshal {
 
   instantiateModule(moduleImport: IModuleImport): Module {
     const { module, config } = moduleImport
-    console.log(this.getModuleConstraint(config), module, typeof module)
     if (typeof module == 'function' || !module.default || !this.isESClass(module.default)) {
-      this.loaded[this.getModuleConstraint(config)] = module;
+      this.mapInstance(config, module as Module);
       return module as Module;
     }
 
     const injectList = this.loadDependencies(module.default, config);
     if (false === injectList) {
+      this.mapInstance(config, module as Module);
       return module as Module;
     }
     // @ts-expect-error TS2351 "This expression is not constructable"
     // TS has issues with dynamically loaded generic classes which is normal (I think)
     const instance = injectList ? new module.default(injectList) as Module : new module.default as Module;
+    this.mapInstance(config, instance);
 
     typeof instance.exec == 'function' && instance.exec();
-    this.loaded[this.getModuleConstraint(config)] = instance;
 
     return instance;
+  }
+
+  mapInstance(config: RegisterConfig, module: Module): void {
+    this.loaded[this.getModuleConstraint(config)] = module;
+    this.instanceMap.set(module, config);
   }
 
   loadDependencies(module: Module, config: RegisterConfig): Record<string, object>|undefined|false {
