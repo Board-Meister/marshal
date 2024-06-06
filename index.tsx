@@ -15,6 +15,9 @@ export interface RegisterConfig {
   asset?: {
     src: string;
   }
+  resource?: {
+    src: string;
+  }
 }
 
 export type Module = Record<string, unknown>;
@@ -58,6 +61,10 @@ export default class Marshal {
     return config.entry.namespace + '/' + config.entry.name + ':' + config.entry.version;
   }
 
+  get(key: string): Module|null {
+    return this.loaded[key] as Module ?? null;
+  }
+
   async load(): Promise<void> {
     const modules = await Promise.all<IModuleImport>(this.generateLoadGroups());
     modules.forEach(this.tagModules.bind(this));
@@ -68,6 +75,14 @@ export default class Marshal {
     (moduleImport.config.tags ?? []).forEach(tag => {
       if (!this.tagMap[tag]) {
         this.tagMap[tag] = [];
+      }
+
+      if (this.isESClass((moduleImport.module as IModuleImportObject).default)) {
+        this.tagMap[tag].push({
+          config: moduleImport.config,
+          module: (moduleImport.module as IModuleImportObject).default!
+        });
+        return;
       }
 
       this.tagMap[tag].push(moduleImport);

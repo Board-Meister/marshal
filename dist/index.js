@@ -11,6 +11,9 @@ export default class Marshal {
     getModuleConstraint(config) {
         return config.entry.namespace + '/' + config.entry.name + ':' + config.entry.version;
     }
+    get(key) {
+        return this.loaded[key] ?? null;
+    }
     async load() {
         const modules = await Promise.all(this.generateLoadGroups());
         modules.forEach(this.tagModules.bind(this));
@@ -20,6 +23,13 @@ export default class Marshal {
         (moduleImport.config.tags ?? []).forEach(tag => {
             if (!this.tagMap[tag]) {
                 this.tagMap[tag] = [];
+            }
+            if (this.isESClass(moduleImport.module.default)) {
+                this.tagMap[tag].push({
+                    config: moduleImport.config,
+                    module: moduleImport.module.default
+                });
+                return;
             }
             this.tagMap[tag].push(moduleImport);
         });

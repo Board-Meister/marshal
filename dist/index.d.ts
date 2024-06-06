@@ -13,6 +13,9 @@ export interface RegisterConfig {
     asset?: {
         src: string;
     };
+    resource?: {
+        src: string;
+    };
 }
 export type Module = Record<string, unknown>;
 interface IModuleImportObject {
@@ -40,6 +43,7 @@ export default class Marshal {
     instanceMap: WeakMap<Module, RegisterConfig>;
     register(config: RegisterConfig): void;
     getModuleConstraint(config: RegisterConfig): string;
+    get(key: string): Module | null;
     load(): Promise<void>;
     tagModules(moduleImport: IModuleImport): void;
     instantiateModule(moduleImport: IModuleImport): Module;
