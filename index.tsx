@@ -31,8 +31,12 @@ interface IModuleImport {
   module: IModuleImportObject | (() => Promise<Module>)
 }
 
-export interface IExecutable {
-  exec: () => void ;
+/**
+ * Initializer is a kernel class of application, manually called by the app.
+ * This is just a helper interface to keep all initializers united
+ */
+export interface IInitializer {
+  init: (global: any) => Promise<void>;
 }
 
 export interface ILazy {
@@ -42,8 +46,8 @@ export interface ILazy {
 // https://stackoverflow.com/a/66947291/11495586 - Static methods interface
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 declare class _IInjectable {
-  constructor(injections: Record<string, object>);
-  static inject: () => Record<string, string>;
+  inject(injections: Record<string, object>): void;
+  static inject: Record<string, string>;
 }
 export type IInjectable = typeof _IInjectable;
 
@@ -61,14 +65,24 @@ export default class Marshal {
     return config.entry.namespace + '/' + config.entry.name + ':' + config.entry.version;
   }
 
-  get(key: string): Module|null {
-    return this.loaded[key] as Module ?? null;
+  get<Type>(key: string): Type|null {
+    return this.loaded[key] as Type ?? null;
   }
 
   async load(): Promise<void> {
     const modules = await Promise.all<IModuleImport>(this.generateLoadGroups());
     modules.forEach(this.tagModules.bind(this));
     modules.forEach(this.instantiateModule.bind(this));
+    this.updateTagModules();
+  }
+
+  updateTagModules(): void {
+    for (const tagKey in this.tagMap) {
+      const tags = this.tagMap[tagKey];
+      tags.forEach(tag => {
+        tag.module = this.get(this.getModuleConstraint(tag.config))!;
+      })
+    }
   }
 
   tagModules(moduleImport: IModuleImport): void {
@@ -103,10 +117,10 @@ export default class Marshal {
     }
     // @ts-expect-error TS2351 "This expression is not constructable"
     // TS has issues with dynamically loaded generic classes which is normal (I think)
-    const instance = injectList ? new module.default(injectList) as Module : new module.default as Module;
-    this.mapInstance(config, instance);
+    const instance = new module.default as Module;
+    typeof instance.inject == 'function' && injectList && instance.inject(injectList);
 
-    typeof instance.exec == 'function' && instance.exec();
+    this.mapInstance(config, instance);
 
     return instance;
   }
@@ -117,11 +131,11 @@ export default class Marshal {
   }
 
   loadDependencies(module: Module, config: RegisterConfig): Record<string, object>|undefined|false {
-    if (typeof module.inject != 'function') {
+    if (typeof module.inject != 'object') {
       return undefined;
     }
 
-    const toInjectList = module.inject() as Record<string, string>,
+    const toInjectList = module.inject as Record<string, string>,
       injectList: Record<string, object> = {};
     for (const name in toInjectList) {
       if (this.isTag(toInjectList[name])) {
@@ -195,7 +209,7 @@ export default class Marshal {
   }
 
   isTag(string: string): boolean {
-    return /^![^\W]+$/.test(string);
+    return /^![^\W.].*$/.test(string);
   }
 
   importModule(config: RegisterConfig): Promise<IModuleImportObject> {

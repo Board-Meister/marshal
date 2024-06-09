@@ -25,15 +25,19 @@ interface IModuleImport {
     config: RegisterConfig;
     module: IModuleImportObject | (() => Promise<Module>);
 }
-export interface IExecutable {
-    exec: () => void;
+/**
+ * Initializer is a kernel class of application, manually called by the app.
+ * This is just a helper interface to keep all initializers united
+ */
+export interface IInitializer {
+    init: (global: any) => Promise<void>;
 }
 export interface ILazy {
     page: () => React.ReactNode;
 }
 declare class _IInjectable {
-    constructor(injections: Record<string, object>);
-    static inject: () => Record<string, string>;
+    inject(injections: Record<string, object>): void;
+    static inject: Record<string, string>;
 }
 export type IInjectable = typeof _IInjectable;
 export default class Marshal {
@@ -43,8 +47,9 @@ export default class Marshal {
     instanceMap: WeakMap<Module, RegisterConfig>;
     register(config: RegisterConfig): void;
     getModuleConstraint(config: RegisterConfig): string;
-    get(key: string): Module | null;
+    get<Type>(key: string): Type | null;
     load(): Promise<void>;
+    updateTagModules(): void;
     tagModules(moduleImport: IModuleImport): void;
     instantiateModule(moduleImport: IModuleImport): Module;
     mapInstance(config: RegisterConfig, module: Module): void;

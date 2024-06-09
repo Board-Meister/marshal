@@ -18,6 +18,15 @@ export default class Marshal {
         const modules = await Promise.all(this.generateLoadGroups());
         modules.forEach(this.tagModules.bind(this));
         modules.forEach(this.instantiateModule.bind(this));
+        this.updateTagModules();
+    }
+    updateTagModules() {
+        for (const tagKey in this.tagMap) {
+            const tags = this.tagMap[tagKey];
+            tags.forEach(tag => {
+                tag.module = this.get(this.getModuleConstraint(tag.config));
+            });
+        }
     }
     tagModules(moduleImport) {
         (moduleImport.config.tags ?? []).forEach(tag => {
@@ -47,9 +56,9 @@ export default class Marshal {
         }
         // @ts-expect-error TS2351 "This expression is not constructable"
         // TS has issues with dynamically loaded generic classes which is normal (I think)
-        const instance = injectList ? new module.default(injectList) : new module.default;
+        const instance = new module.default;
+        typeof instance.inject == 'function' && injectList && instance.inject(injectList);
         this.mapInstance(config, instance);
-        typeof instance.exec == 'function' && instance.exec();
         return instance;
     }
     mapInstance(config, module) {
@@ -57,10 +66,10 @@ export default class Marshal {
         this.instanceMap.set(module, config);
     }
     loadDependencies(module, config) {
-        if (typeof module.inject != 'function') {
+        if (typeof module.inject != 'object') {
             return undefined;
         }
-        const toInjectList = module.inject(), injectList = {};
+        const toInjectList = module.inject, injectList = {};
         for (const name in toInjectList) {
             if (this.isTag(toInjectList[name])) {
                 injectList[name] = this.tagMap[toInjectList[name].substring(1)] ?? [];
@@ -108,7 +117,7 @@ export default class Marshal {
         return loadGroups;
     }
     isTag(string) {
-        return /^![^\W]+$/.test(string);
+        return /^![^\W.].*$/.test(string);
     }
     importModule(config) {
         return typeof config.entry.source == 'string'
