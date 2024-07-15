@@ -25,7 +25,7 @@ export interface RegisterConfig {
 export type Module = Record<string, unknown>;
 
 export interface IModuleImportObject {
-  default?: Module|React.FC;
+  default?: Module|React.FC|Function;
 }
 
 export interface IModuleImport {
@@ -262,14 +262,15 @@ export default class Marshal {
     return /^![^\W.].*$/.test(string);
   }
 
-  async import(source: string): Promise<IModuleImportObject> {
-    const tmpName = String(Math.random().toString(36).substring(2));
+  async import(source: string, addScope: Record<string, any> = {}): Promise<IModuleImportObject> {
+    const tmpName = String(Math.random().toString(36).substring(2)),
+      scope = Object.assign({}, this.scope, addScope)
 
     // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
-    window[tmpName] = this.scope;
+    window[tmpName] = scope;
 
     let variables = '';
-    for (const varName in this.scope) {
+    for (const varName in scope) {
       variables += 'const ' + varName + ' = window["' + tmpName + '"]["' + varName + '"];';
     }
 
@@ -312,7 +313,7 @@ export default class Marshal {
     return new Promise(resolve => {
       void this.importModule(config)
         .then(module => {
-          resolve({ module , config });
+          resolve({ module, config });
         })
     });
   }

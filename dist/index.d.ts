@@ -21,7 +21,7 @@ export interface RegisterConfig {
 }
 export type Module = Record<string, unknown>;
 export interface IModuleImportObject {
-    default?: Module | React.FC;
+    default?: Module | React.FC | Function;
 }
 export interface IModuleImport {
     config: RegisterConfig;
@@ -67,7 +67,7 @@ export default class Marshal {
     isESClass(fn: unknown): boolean;
     generateLoadGroups(): Promise<IModuleImport>[];
     isTag(string: string): boolean;
-    import(source: string): Promise<IModuleImportObject>;
+    import(source: string, addScope?: Record<string, any>): Promise<IModuleImportObject>;
     importModule(config: RegisterConfig): Promise<IModuleImportObject>;
     retrieveModulePromise(config: RegisterConfig): Promise<IModuleImport>;
     isObjectEmpty(obj: object): boolean;
