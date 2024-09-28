@@ -10,6 +10,7 @@ export interface EntryConfig {
 
 export interface RegisterConfig {
   entry: EntryConfig;
+  type: 'scope'|'module';
   scope?: boolean;
   tags?: string[];
   requires?: string[];
@@ -50,6 +51,7 @@ export interface ILazy {
 declare class _IInjectable {
   constructor(...args: any[]);
   inject(injections: Record<string, object>): void;
+  scope?(): Record<string, any>;
   static inject: Record<string, string>;
 }
 export type IInjectable = typeof _IInjectable;
@@ -65,6 +67,7 @@ export default class Marshal {
 
   constructor() {
     this.register({
+      type: 'module',
       entry: {
         name: 'marshal',
         namespace: 'boardmeister',
@@ -102,10 +105,39 @@ export default class Marshal {
   }
 
   async load(): Promise<void> {
-    const modules = await Promise.all<IModuleImport>(this.generateLoadGroups());
+    const modules = await Promise.all<IModuleImport>(this.generateLoadGroups(await this.loadScopes()));
     modules.forEach(this.tagModules.bind(this));
     modules.forEach(this.instantiateModule.bind(this));
     this.updateTagModules();
+  }
+
+  async loadScopes(): Promise<Record<string, RegisterConfig>> {
+    const modules: Record<string, RegisterConfig> = {},
+      scopes: Record<string, RegisterConfig> = {}
+    ;
+    for (const key in this.registered) {
+      const module = this.registered[key];
+      if (module.type === 'scope') {
+        scopes[key] = module;
+      } else {
+        modules[key] = module;
+      }
+    }
+
+    const loaded = await Promise.all<IModuleImport>(this.generateLoadGroups(scopes));
+    loaded.forEach(moduleImport => {
+      const imported = moduleImport.module as IModuleImportObject|null,
+        { module, config } = moduleImport
+      ;
+      this.mapInstance(config, module as Module);
+      if (typeof imported?.default === 'object') {
+        for (const key in imported?.default) {
+          this.addScope(key, imported?.default[key]);
+        }
+      }
+    })
+
+    return modules
   }
 
   updateTagModules(): void {
@@ -212,10 +244,9 @@ export default class Marshal {
     ;
   }
 
-  generateLoadGroups(): Promise<IModuleImport>[] {
+  generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[] {
     const loadGroups: Promise<IModuleImport>[] = [],
-      prepared: Record<string, boolean> = {},
-      toSend: Record<string, RegisterConfig> = Object.assign({}, this.registered)
+      prepared: Record<string, boolean> = {}
     ;
 
     let tries = Object.keys(toSend).length**2;
@@ -265,6 +296,7 @@ export default class Marshal {
   async import(source: string, addScope: Record<string, any> = {}): Promise<IModuleImportObject> {
     const tmpName = String(Math.random().toString(36).substring(2)),
       scope = Object.assign({}, this.scope, addScope)
+    ;
 
     // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
     window[tmpName] = scope;

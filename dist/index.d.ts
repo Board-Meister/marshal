@@ -8,6 +8,7 @@ export interface EntryConfig {
 }
 export interface RegisterConfig {
     entry: EntryConfig;
+    type: 'scope' | 'module';
     scope?: boolean;
     tags?: string[];
     requires?: string[];
@@ -40,6 +41,7 @@ export interface ILazy {
 declare class _IInjectable {
     constructor(...args: any[]);
     inject(injections: Record<string, object>): void;
+    scope?(): Record<string, any>;
     static inject: Record<string, string>;
 }
 export type IInjectable = typeof _IInjectable;
@@ -58,6 +60,7 @@ export default class Marshal {
     getModuleConstraint(config: RegisterConfig): string;
     get<Type>(key: string): Type | null;
     load(): Promise<void>;
+    loadScopes(): Promise<Record<string, RegisterConfig>>;
     updateTagModules(): void;
     tagModules(moduleImport: IModuleImport): void;
     instantiateModule(moduleImport: IModuleImport): Module;
@@ -65,7 +68,7 @@ export default class Marshal {
     getMappedInstance(module: Module): RegisterConfig | undefined;
     loadDependencies(module: Module, config: RegisterConfig): Record<string, object> | undefined | false;
     isESClass(fn: unknown): boolean;
-    generateLoadGroups(): Promise<IModuleImport>[];
+    generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[];
     isTag(string: string): boolean;
     import(source: string, addScope?: Record<string, any>): Promise<IModuleImportObject>;
     importModule(config: RegisterConfig): Promise<IModuleImportObject>;

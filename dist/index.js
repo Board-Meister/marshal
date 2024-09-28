@@ -7,6 +7,7 @@ class Marshal {
         this.scope = {};
         this.instanceMap = new WeakMap();
         this.register({
+            type: 'module',
             entry: {
                 name: 'marshal',
                 namespace: 'boardmeister',
@@ -37,10 +38,33 @@ class Marshal {
         return this.loaded[key] ?? null;
     }
     async load() {
-        const modules = await Promise.all(this.generateLoadGroups());
+        const modules = await Promise.all(this.generateLoadGroups(await this.loadScopes()));
         modules.forEach(this.tagModules.bind(this));
         modules.forEach(this.instantiateModule.bind(this));
         this.updateTagModules();
+    }
+    async loadScopes() {
+        const modules = {}, scopes = {};
+        for (const key in this.registered) {
+            const module = this.registered[key];
+            if (module.type === 'scope') {
+                scopes[key] = module;
+            }
+            else {
+                modules[key] = module;
+            }
+        }
+        const loaded = await Promise.all(this.generateLoadGroups(scopes));
+        loaded.forEach(moduleImport => {
+            const imported = moduleImport.module, { module, config } = moduleImport;
+            this.mapInstance(config, module);
+            if (typeof imported?.default === 'object') {
+                for (const key in imported?.default) {
+                    this.addScope(key, imported?.default[key]);
+                }
+            }
+        });
+        return modules;
     }
     updateTagModules() {
         for (const tagKey in this.tagMap) {
@@ -123,8 +147,8 @@ class Marshal {
         return typeof fn === 'function'
             && Object.getOwnPropertyDescriptor(fn, 'prototype')?.writable === false;
     }
-    generateLoadGroups() {
-        const loadGroups = [], prepared = {}, toSend = Object.assign({}, this.registered);
+    generateLoadGroups(toSend) {
+        const loadGroups = [], prepared = {};
         let tries = Object.keys(toSend).length ** 2;
         while (!this.isObjectEmpty(toSend)) {
             tries--;
