@@ -1,17 +1,15 @@
-import type React from "react";
-
 export interface EntryConfig {
   source: string|object;
   namespace: string;
   name: string;
   version: string;
-  arguments?: any[];
+  arguments?: unknown[];
 }
 
 export interface RegisterConfig {
   entry: EntryConfig;
   type: 'scope'|'module';
-  scope?: boolean;
+  scope?: boolean; // @deprecated
   tags?: string[];
   requires?: string[];
   lazy?: boolean;
@@ -26,7 +24,7 @@ export interface RegisterConfig {
 export type Module = Record<string, unknown>;
 
 export interface IModuleImportObject {
-  default?: Module|React.FC|Function;
+  default?: Module|((...args: unknown[]) => void);
 }
 
 export interface IModuleImport {
@@ -39,19 +37,15 @@ export interface IModuleImport {
  * This is just a helper interface to keep all initializers united
  */
 export interface IInitializer {
-  init: (global: any) => Promise<void>;
-}
-
-export interface ILazy {
-  page: () => React.ReactNode ;
+  init: (global: unknown) => Promise<void>;
 }
 
 // https://stackoverflow.com/a/66947291/11495586 - Static methods interface
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 declare class _IInjectable {
-  constructor(...args: any[]);
+  constructor(...args: unknown[]);
   inject(injections: Record<string, object>): void;
-  scope?(): Record<string, any>;
+  scope?(): Record<string, unknown>;
   static inject: Record<string, string>;
 }
 export type IInjectable = typeof _IInjectable;
@@ -62,7 +56,7 @@ export default class Marshal {
   registered: Record<string, RegisterConfig> = {};
   loaded: Record<string, object> = {};
   tagMap: Record<string, IModuleImport[]> = {};
-  scope: Record<string, any> = {};
+  scope: Record<string, unknown> = {};
   instanceMap = new WeakMap<Module, RegisterConfig>();
 
   constructor() {
@@ -77,7 +71,7 @@ export default class Marshal {
     })
   }
 
-  addScope(name: string, value: any): void {
+  addScope(name: string, value: unknown): void {
     if (this.scope[name]) {
       throw new Error('Variable with name "' + name + '" already exists');
     }
@@ -124,9 +118,13 @@ export default class Marshal {
       }
     }
 
-    const loaded = await Promise.all<IModuleImport>(this.generateLoadGroups(scopes));
-    loaded.forEach(moduleImport => {
-      const imported = moduleImport.module as IModuleImportObject|null,
+    // @TODO implement grouping for scopes.
+    // We are currently loading one scope after another, which might not be the best solution
+    // if we have 10 scope but only depend on the first one (which means we can load 9 of them at once)
+    const ordered = this.orderModules(scopes);
+    for (const scope of ordered) {
+      const moduleImport = await this.retrieveModulePromise(scope),
+        imported = moduleImport.module as IModuleImportObject|null,
         { module, config } = moduleImport
       ;
       this.mapInstance(config, module as Module);
@@ -135,7 +133,7 @@ export default class Marshal {
           this.addScope(key, imported?.default[key]);
         }
       }
-    })
+    }
 
     return modules
   }
@@ -244,21 +242,21 @@ export default class Marshal {
     ;
   }
 
-  generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[] {
-    const loadGroups: Promise<IModuleImport>[] = [],
+  orderModules(moduleRegistry: Record<string, RegisterConfig>): RegisterConfig[] {
+    const sorted: RegisterConfig[] = [],
       prepared: Record<string, boolean> = {}
     ;
 
-    let tries = Object.keys(toSend).length**2;
-    while (!this.isObjectEmpty(toSend)) {
+    let tries = Object.keys(moduleRegistry).length**2;
+    while (!this.isObjectEmpty(moduleRegistry)) {
       tries--;
       if (tries < 0) {
-        console.warn('Not registered in load groups', toSend)
+        console.warn('Not registered in load groups', moduleRegistry)
         throw new Error('Infinite dependency detected, stopping script...')
       }
-      toSendLoop: for (const name in toSend) {
+      toSendLoop: for (const name in moduleRegistry) {
 
-        const moduleConfig = toSend[name],
+        const moduleConfig = moduleRegistry[name],
           requires = moduleConfig.requires ?? []
         ;
 
@@ -268,23 +266,32 @@ export default class Marshal {
           }
 
           // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (!prepared[required] && !toSend[required] && !this.loaded[required]) {
+          if (!prepared[required] && !moduleRegistry[required] && !this.loaded[required]) {
             throw new Error('Module ' + name + ' is requesting not present dependency: ' + required);
           }
 
           // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-          if (toSend[required]) {
+          if (moduleRegistry[required]) {
             continue toSendLoop;
           }
         }
 
-        loadGroups.push(this.retrieveModulePromise(moduleConfig));
+        sorted.push(moduleConfig);
 
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
-        delete toSend[name];
+        delete moduleRegistry[name];
         prepared[name] = true;
       }
     }
+
+    return sorted;
+  }
+
+  generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[] {
+    const loadGroups: Promise<IModuleImport>[] = [];
+    this.orderModules(toSend).forEach(module => {
+      loadGroups.push(this.retrieveModulePromise(module));
+    })
 
     return loadGroups;
   }
@@ -293,7 +300,7 @@ export default class Marshal {
     return /^![^\W.].*$/.test(string);
   }
 
-  async import(source: string, addScope: Record<string, any> = {}): Promise<IModuleImportObject> {
+  async import(source: string, addScope: Record<string, unknown> = {}): Promise<IModuleImportObject> {
     const tmpName = String(Math.random().toString(36).substring(2)),
       scope = Object.assign({}, this.scope, addScope)
     ;
@@ -359,21 +366,3 @@ export default class Marshal {
     return true;
   }
 }
-
-
-// ** SAVED FOR FUTURE USE ** //
-// export declare type InjectReturnType = Function;
-// export declare type InjectConfigType = Record<string, string>;
-// declare function inject(injectables: InjectConfigType): InjectReturnType;
-// export function inject(injectables: InjectConfigType): Function {
-//   console.log('constructor', injectables)
-//
-//   return (target: Function) => {
-//     for (const key in injectables) {
-//       (target.prototype as Record<string, unknown>)[key] = injectables[key];
-//     }
-//     console.log('new constructor', target)
-//     return target;
-//   };
-// }
-// ** SAVED FOR FUTURE USE ** //
