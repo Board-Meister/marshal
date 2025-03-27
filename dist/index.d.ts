@@ -21,7 +21,11 @@ export interface RegisterConfig {
 		src: string;
 	};
 }
-export type Module = Record<string, unknown>;
+export declare class CModule<T = any> {
+	constructor(...args: unknown[]);
+	inject?: (injections: T) => void;
+}
+export type Module<T = any> = CModule<T> | Record<string, unknown>;
 export interface IModuleImportObject {
 	default?: Module | ((...args: unknown[]) => void);
 }
@@ -29,20 +33,13 @@ export interface IModuleImport {
 	config: RegisterConfig;
 	module: IModuleImportObject | (() => Promise<Module>);
 }
-/**
- * Initializer is a kernel class of application, manually called by the app.
- * This is just a helper interface to keep all initializers united
- */
-export interface IInitializer {
-	init: (global: unknown) => Promise<void>;
-}
-declare class _IInjectable {
+declare class _IInjectable<T = object> {
 	constructor(...args: unknown[]);
-	inject(injections: Record<string, object>): void;
+	inject(injections: T): void;
 	scope?(): Record<string, unknown>;
 	static inject: Record<string, string>;
 }
-export type IInjectable = typeof _IInjectable;
+export type IInjectable<T> = typeof _IInjectable<T>;
 declare class Marshal {
 	static version: string;
 	renderCount: number;
@@ -50,7 +47,7 @@ declare class Marshal {
 	loaded: Record<string, object>;
 	tagMap: Record<string, IModuleImport[]>;
 	scope: Record<string, unknown>;
-	instanceMap: WeakMap<Module, RegisterConfig>;
+	instanceMap: WeakMap<Module<any>, RegisterConfig>;
 	constructor();
 	addScope(name: string, value: unknown): void;
 	render(): void;

@@ -21,7 +21,12 @@ export interface RegisterConfig {
   }
 }
 
-export type Module = Record<string, unknown>;
+export declare class CModule<T = any> {
+  constructor(...args: unknown[]);
+  inject?: (injections: T) => void;
+}
+
+export type Module<T = any> = CModule<T>|Record<string, unknown>;
 
 export interface IModuleImportObject {
   default?: Module|((...args: unknown[]) => void);
@@ -32,23 +37,15 @@ export interface IModuleImport {
   module: IModuleImportObject | (() => Promise<Module>)
 }
 
-/**
- * Initializer is a kernel class of application, manually called by the app.
- * This is just a helper interface to keep all initializers united
- */
-export interface IInitializer {
-  init: (global: unknown) => Promise<void>;
-}
-
 // https://stackoverflow.com/a/66947291/11495586 - Static methods interface
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
-declare class _IInjectable {
+declare class _IInjectable<T = object> {
   constructor(...args: unknown[]);
-  inject(injections: Record<string, object>): void;
+  inject(injections: T): void;
   scope?(): Record<string, unknown>;
   static inject: Record<string, string>;
 }
-export type IInjectable = typeof _IInjectable;
+export type IInjectable<T> = typeof _IInjectable<T>;
 
 export default class Marshal {
   static version = '1.0.0';
@@ -130,7 +127,7 @@ export default class Marshal {
       this.mapInstance(config, module as Module);
       if (typeof imported?.default === 'object') {
         for (const key in imported?.default) {
-          this.addScope(key, imported?.default[key]);
+          this.addScope(key, (imported?.default as Record<string, unknown>)[key]);
         }
       }
     }
@@ -156,7 +153,7 @@ export default class Marshal {
       if (this.isESClass((moduleImport.module as IModuleImportObject).default)) {
         this.tagMap[tag].push({
           config: moduleImport.config,
-          module: (moduleImport.module as IModuleImportObject).default! as Module
+          module: ((moduleImport.module as IModuleImportObject).default! as any) as IModuleImportObject
         });
         return;
       }
@@ -167,19 +164,25 @@ export default class Marshal {
 
   instantiateModule(moduleImport: IModuleImport): Module {
     const { module, config } = moduleImport
-    if (typeof module == 'function' || !module.default || !this.isESClass(module.default)) {
-      this.mapInstance(config, module as Module);
-      return module as Module;
+    let mInstance;
+    if (typeof module != 'function' && module.default) {
+      mInstance = module.default as Module;
+    } else {
+      mInstance = module;
+    }
+    if (!this.isESClass(mInstance)) {
+      this.mapInstance(config, mInstance as Module);
+      return mInstance as Module;
     }
 
-    const injectList = this.loadDependencies(module.default as Module, config);
+    const injectList = this.loadDependencies(mInstance as Module, config);
     if (false === injectList) {
-      this.mapInstance(config, module as Module);
-      return module as Module;
+      this.mapInstance(config, mInstance as Module);
+      return mInstance as Module;
     }
     // @ts-expect-error TS2351 "This expression is not constructable"
     // TS has issues with dynamically loaded generic classes which is normal (I think)
-    const instance = new module.default(...(config.entry.arguments ?? [])) as Module;
+    const instance = new mInstance(...(config.entry.arguments ?? [])) as Module;
     typeof instance.inject == 'function' && injectList && instance.inject(injectList);
 
     this.mapInstance(config, instance);
