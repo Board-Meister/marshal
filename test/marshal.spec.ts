@@ -178,7 +178,7 @@ describe('Marshal', () => {
         expect(inj2Ins?.injected?.inj1).toBeInstanceOf(inj1);
     });
 
-    fit('tags are resolved properly and injected', async () => {
+    it('tags are resolved properly and injected', async () => {
         class main {
             injected?: { tagged: object[] };
             static inject: Record<string, string> = {
