@@ -42,7 +42,6 @@ declare class _IInjectable<T = object> {
 export type IInjectable<T> = typeof _IInjectable<T>;
 declare class Marshal {
 	static version: string;
-	renderCount: number;
 	registered: Record<string, RegisterConfig>;
 	loaded: Record<string, object>;
 	tagMap: Record<string, IModuleImport[]>;
@@ -50,7 +49,6 @@ declare class Marshal {
 	instanceMap: WeakMap<Module<any>, RegisterConfig>;
 	constructor();
 	addScope(name: string, value: unknown): void;
-	render(): void;
 	register(config: RegisterConfig): void;
 	getModuleConstraint(config: RegisterConfig): string;
 	get<Type>(key: string): Type | null;

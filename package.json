@@ -10,7 +10,11 @@
   ],
   "scripts": {
     "typescript": "./node_modules/.bin/dts-bundle-generator --no-check --export-referenced-types false --project tsconfig.json -o dist/index.d.ts index.tsx",
-    "build": "node esbuild.config.mjs && npm run typescript"
+    "build": "node esbuild.config.mjs && npm run typescript",
+    "test": "npx jasmine-browser-runner runSpecs",
+    "serve-jasmine": "npx jasmine-browser-runner serve",
+    "coverage": "nyc --reporter=text-summary npm run test",
+    "karma": "karma start karma.conf.js"
   },
   "repository": {
     "type": "git",
@@ -25,16 +29,19 @@
   "bugs": {
     "url": "https://github.com/Board-Meister/marshal/issues"
   },
-  "dependencies": {
-  },
   "homepage": "https://github.com/Board-Meister/marshal#readme",
   "devDependencies": {
+    "@types/jasmine": "^5.1.8",
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
     "dts-bundle-generator": "^9.5.1",
     "esbuild": "0.21.4",
     "esbuild-plugin-output-reset": "^2.0.1",
-    "@typescript-eslint/eslint-plugin": "^7.2.0",
-    "@typescript-eslint/parser": "^7.2.0",
     "eslint": "^8.57.0",
+    "glob": "^11.0.2",
+    "jasmine": "^5.7.1",
+    "jasmine-browser-runner": "^3.0.0",
+    "jasmine-core": "^5.7.1",
     "typescript": "^5.4.5"
   }
 }

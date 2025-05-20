@@ -49,7 +49,6 @@ export type IInjectable<T> = typeof _IInjectable<T>;
 
 export default class Marshal {
   static version = '1.0.0';
-  renderCount = 0;
   registered: Record<string, RegisterConfig> = {};
   loaded: Record<string, object> = {};
   tagMap: Record<string, IModuleImport[]> = {};
@@ -74,10 +73,6 @@ export default class Marshal {
     }
 
     this.scope[name] = value;
-  }
-
-  render(): void {
-    this.renderCount++;
   }
 
   register(config: RegisterConfig): void {
@@ -207,7 +202,8 @@ export default class Marshal {
     }
 
     const toInjectList = module.inject as Record<string, string>,
-      injectList: Record<string, object> = {};
+      injectList: Record<string, object> = {}
+    ;
     for (const name in toInjectList) {
       if (this.isTag(toInjectList[name])) {
         // Make sure that we are using the same array for all tags, otherwise if tag was empty we might create
@@ -236,7 +232,7 @@ export default class Marshal {
     return injectList;
   }
 
-  isESClass (fn: unknown): boolean {
+  isESClass(fn: unknown): boolean {
     return typeof fn === 'function'
       && Object.getOwnPropertyDescriptor(
         fn,
@@ -250,7 +246,7 @@ export default class Marshal {
       prepared: Record<string, boolean> = {}
     ;
 
-    let tries = Object.keys(moduleRegistry).length**2;
+    let tries = Object.keys(moduleRegistry).length*2;
     while (!this.isObjectEmpty(moduleRegistry)) {
       tries--;
       if (tries < 0) {
