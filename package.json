@@ -12,9 +12,7 @@
     "typescript": "./node_modules/.bin/dts-bundle-generator --no-check --export-referenced-types false --project tsconfig.json -o dist/index.d.ts index.tsx",
     "build": "node esbuild.config.mjs && npm run typescript",
     "test": "npx jasmine-browser-runner runSpecs",
-    "serve-jasmine": "npx jasmine-browser-runner serve",
-    "coverage": "nyc --reporter=text-summary npm run test",
-    "karma": "karma start karma.conf.js"
+    "serve-jasmine": "npx jasmine-browser-runner serve"
   },
   "repository": {
     "type": "git",
