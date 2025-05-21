@@ -48,12 +48,12 @@ declare class _IInjectable<T = object> {
 export type IInjectable<T> = typeof _IInjectable<T>;
 
 export default class Marshal {
-  static version = '1.0.0';
+  static version = '0.0.2';
   registered: Record<string, RegisterConfig> = {};
   loaded: Record<string, object> = {};
-  tagMap: Record<string, IModuleImport[]> = {};
   scope: Record<string, unknown> = {};
-  instanceMap = new WeakMap<Module, RegisterConfig>();
+  #tagMap: Record<string, IModuleImport[]> = {};
+  #instanceMap = new WeakMap<Module, RegisterConfig>();
 
   constructor() {
     this.register({
@@ -91,13 +91,33 @@ export default class Marshal {
   }
 
   async load(): Promise<void> {
-    const modules = await Promise.all<IModuleImport>(this.generateLoadGroups(await this.loadScopes()));
-    modules.forEach(this.tagModules.bind(this));
-    modules.forEach(this.instantiateModule.bind(this));
-    this.updateTagModules();
+    const modules = await Promise.all<IModuleImport>(this.#generateLoadGroups(await this.#loadScopes()));
+    modules.forEach(this.#tagModules.bind(this));
+    modules.forEach(this.#instantiateModule.bind(this));
+    this.#updateTagModules();
   }
 
-  async loadScopes(): Promise<Record<string, RegisterConfig>> {
+  getResourceUrl(module: Module, suffix: string): string {
+    const config = this.getMappedInstance(module);
+
+    if (!config?.resource) {
+      throw new Error('Provided module configuration is missing resource definition');
+    }
+
+    return (config.resource as { src: string }).src + suffix;
+  }
+
+  asset(module: Module, suffix: string): string {
+    const config = this.getMappedInstance(module);
+
+    if (!config?.asset) {
+      throw new Error('Provided module configuration is missing asset definition');
+    }
+
+    return config.asset.src + suffix;
+  }
+
+  async #loadScopes(): Promise<Record<string, RegisterConfig>> {
     const modules: Record<string, RegisterConfig> = {},
       scopes: Record<string, RegisterConfig> = {}
     ;
@@ -113,13 +133,13 @@ export default class Marshal {
     // @TODO implement grouping for scopes.
     // We are currently loading one scope after another, which might not be the best solution
     // if we have 10 scope but only depend on the first one (which means we can load 9 of them at once)
-    const ordered = this.orderModules(scopes);
+    const ordered = this.#orderModules(scopes);
     for (const scope of ordered) {
-      const moduleImport = await this.retrieveModulePromise(scope),
+      const moduleImport = await this.#retrieveModulePromise(scope),
         imported = moduleImport.module as IModuleImportObject|null,
         { module, config } = moduleImport
       ;
-      this.mapInstance(config, module as Module);
+      this.#mapInstance(config, module as Module);
       if (typeof imported?.default === 'object') {
         for (const key in imported?.default) {
           this.addScope(key, (imported?.default as Record<string, unknown>)[key]);
@@ -130,34 +150,34 @@ export default class Marshal {
     return modules
   }
 
-  updateTagModules(): void {
-    for (const tagKey in this.tagMap) {
-      const tags = this.tagMap[tagKey];
+  #updateTagModules(): void {
+    for (const tagKey in this.#tagMap) {
+      const tags = this.#tagMap[tagKey];
       tags.forEach(tag => {
         tag.module = this.get(this.getModuleConstraint(tag.config))!;
       })
     }
   }
 
-  tagModules(moduleImport: IModuleImport): void {
+  #tagModules(moduleImport: IModuleImport): void {
     (moduleImport.config.tags ?? []).forEach(tag => {
-      if (typeof this.tagMap[tag] == 'undefined') {
-        this.tagMap[tag] = [];
+      if (typeof this.#tagMap[tag] == 'undefined') {
+        this.#tagMap[tag] = [];
       }
 
       if (this.isESClass((moduleImport.module as IModuleImportObject).default)) {
-        this.tagMap[tag].push({
+        this.#tagMap[tag].push({
           config: moduleImport.config,
           module: ((moduleImport.module as IModuleImportObject).default! as any) as IModuleImportObject
         });
         return;
       }
 
-      this.tagMap[tag].push(moduleImport);
+      this.#tagMap[tag].push(moduleImport);
     })
   }
 
-  instantiateModule(moduleImport: IModuleImport): Module {
+  #instantiateModule(moduleImport: IModuleImport): Module {
     const { module, config } = moduleImport
     let mInstance;
     if (typeof module != 'function' && module.default) {
@@ -166,13 +186,13 @@ export default class Marshal {
       mInstance = module;
     }
     if (!this.isESClass(mInstance)) {
-      this.mapInstance(config, mInstance as Module);
+      this.#mapInstance(config, mInstance as Module);
       return mInstance as Module;
     }
 
-    const injectList = this.loadDependencies(mInstance as Module, config);
+    const injectList = this.#loadDependencies(mInstance as Module, config);
     if (false === injectList) {
-      this.mapInstance(config, mInstance as Module);
+      this.#mapInstance(config, mInstance as Module);
       return mInstance as Module;
     }
     // @ts-expect-error TS2351 "This expression is not constructable"
@@ -180,23 +200,23 @@ export default class Marshal {
     const instance = new mInstance(...(config.entry.arguments ?? [])) as Module;
     typeof instance.inject == 'function' && injectList && instance.inject(injectList);
 
-    this.mapInstance(config, instance);
+    this.#mapInstance(config, instance);
 
     return instance;
   }
 
-  mapInstance(config: RegisterConfig, module: Module): void {
+  #mapInstance(config: RegisterConfig, module: Module): void {
     const constraint = this.getModuleConstraint(config);
     delete this.registered[constraint];
     this.loaded[constraint] = module;
-    this.instanceMap.set(module, config);
+    this.#instanceMap.set(module, config);
   }
 
   getMappedInstance(module: Module): RegisterConfig | undefined {
-    return this.instanceMap.get(module);
+    return this.#instanceMap.get(module);
   }
 
-  loadDependencies(module: Module, config: RegisterConfig): Record<string, object>|undefined|false {
+  #loadDependencies(module: Module, config: RegisterConfig): Record<string, object>|undefined|false {
     if (typeof module.inject != 'object') {
       return undefined;
     }
@@ -209,10 +229,10 @@ export default class Marshal {
         // Make sure that we are using the same array for all tags, otherwise if tag was empty we might create
         // different pointers
         const tagName = toInjectList[name].substring(1);
-        if (typeof this.tagMap[tagName] == 'undefined') {
-          this.tagMap[tagName] = [];
+        if (typeof this.#tagMap[tagName] == 'undefined') {
+          this.#tagMap[tagName] = [];
         }
-        injectList[name] = this.tagMap[tagName];
+        injectList[name] = this.#tagMap[tagName];
         continue;
       }
 
@@ -241,13 +261,13 @@ export default class Marshal {
     ;
   }
 
-  orderModules(moduleRegistry: Record<string, RegisterConfig>): RegisterConfig[] {
+  #orderModules(moduleRegistry: Record<string, RegisterConfig>): RegisterConfig[] {
     const sorted: RegisterConfig[] = [],
       prepared: Record<string, boolean> = {}
     ;
 
     let tries = Object.keys(moduleRegistry).length*2;
-    while (!this.isObjectEmpty(moduleRegistry)) {
+    while (!this.#isObjectEmpty(moduleRegistry)) {
       tries--;
       if (tries < 0) {
         console.warn('Not registered in load groups', moduleRegistry)
@@ -286,10 +306,10 @@ export default class Marshal {
     return sorted;
   }
 
-  generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[] {
+  #generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[] {
     const loadGroups: Promise<IModuleImport>[] = [];
-    this.orderModules(toSend).forEach(module => {
-      loadGroups.push(this.retrieveModulePromise(module));
+    this.#orderModules(toSend).forEach(module => {
+      loadGroups.push(this.#retrieveModulePromise(module));
     })
 
     return loadGroups;
@@ -328,20 +348,20 @@ export default class Marshal {
     return exports;
   }
 
-  importModule(config: RegisterConfig): Promise<IModuleImportObject> {
+  #importModule(config: RegisterConfig): Promise<IModuleImportObject> {
     return typeof config.entry.source == 'string'
       ? this.import(config.entry.source)
       : Promise.resolve(config.entry.source) as Promise<IModuleImportObject>
     ;
   }
 
-  async retrieveModulePromise(config: RegisterConfig): Promise<IModuleImport> {
+  async #retrieveModulePromise(config: RegisterConfig): Promise<IModuleImport> {
     if (config.lazy) {
       return new Promise(resolve => {
         resolve({ module: () => new Promise(resolve => {
-          void this.importModule(config)
+          void this.#importModule(config)
             .then((module: IModuleImportObject) => {
-              resolve(this.instantiateModule({ module, config }))
+              resolve(this.#instantiateModule({ module, config }))
             })
           ;
         }), config });
@@ -349,14 +369,14 @@ export default class Marshal {
     }
 
     return new Promise(resolve => {
-      void this.importModule(config)
+      void this.#importModule(config)
         .then(module => {
           resolve({ module, config });
         })
     });
   }
 
-  isObjectEmpty(obj: object): boolean {
+  #isObjectEmpty(obj: object): boolean {
     for(const prop in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, prop))
         return false;

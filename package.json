@@ -1,6 +1,6 @@
 {
   "name": "@boardmeister/marshal",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Module responsible for application setup",
   "main": "dist/index.js",
   "module": "dist/index.js",

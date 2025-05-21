@@ -41,33 +41,23 @@ declare class _IInjectable<T = object> {
 }
 export type IInjectable<T> = typeof _IInjectable<T>;
 declare class Marshal {
+	#private;
 	static version: string;
 	registered: Record<string, RegisterConfig>;
 	loaded: Record<string, object>;
-	tagMap: Record<string, IModuleImport[]>;
 	scope: Record<string, unknown>;
-	instanceMap: WeakMap<Module<any>, RegisterConfig>;
 	constructor();
 	addScope(name: string, value: unknown): void;
 	register(config: RegisterConfig): void;
 	getModuleConstraint(config: RegisterConfig): string;
 	get<Type>(key: string): Type | null;
 	load(): Promise<void>;
-	loadScopes(): Promise<Record<string, RegisterConfig>>;
-	updateTagModules(): void;
-	tagModules(moduleImport: IModuleImport): void;
-	instantiateModule(moduleImport: IModuleImport): Module;
-	mapInstance(config: RegisterConfig, module: Module): void;
+	getResourceUrl(module: Module, suffix: string): string;
+	asset(module: Module, suffix: string): string;
 	getMappedInstance(module: Module): RegisterConfig | undefined;
-	loadDependencies(module: Module, config: RegisterConfig): Record<string, object> | undefined | false;
 	isESClass(fn: unknown): boolean;
-	orderModules(moduleRegistry: Record<string, RegisterConfig>): RegisterConfig[];
-	generateLoadGroups(toSend: Record<string, RegisterConfig>): Promise<IModuleImport>[];
 	isTag(string: string): boolean;
 	import(source: string, addScope?: Record<string, unknown>): Promise<IModuleImportObject>;
-	importModule(config: RegisterConfig): Promise<IModuleImportObject>;
-	retrieveModulePromise(config: RegisterConfig): Promise<IModuleImport>;
-	isObjectEmpty(obj: object): boolean;
 }
 
 export {
