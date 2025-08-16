@@ -52,8 +52,8 @@ export default class Marshal {
   registered: Record<string, RegisterConfig> = {};
   loaded: Record<string, object> = {};
   scope: Record<string, unknown> = {};
-  #tagMap: Record<string, IModuleImport[]> = {};
-  #instanceMap = new WeakMap<Module, RegisterConfig>();
+  tagMap: Record<string, IModuleImport[]> = {};
+  instanceMap = new WeakMap<Module, RegisterConfig>();
 
   constructor() {
     this.register({
@@ -117,6 +117,39 @@ export default class Marshal {
     return config.asset.src + suffix;
   }
 
+  getMappedInstance(module: Module): RegisterConfig | undefined {
+    return this.instanceMap.get(module);
+  }
+
+  async import(source: string, addScope: Record<string, unknown> = {}): Promise<IModuleImportObject> {
+    const tmpName = String(Math.random().toString(36).substring(2)),
+      scope = Object.assign({}, this.scope, addScope)
+    ;
+
+    // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
+    window[tmpName] = scope;
+
+    let variables = '';
+    for (const varName in scope) {
+      variables += 'const ' + varName + ' = window["' + tmpName + '"]["' + varName + '"];';
+    }
+
+    let module = await(await fetch(source)).text();
+    module = variables + module;
+    const script = new Blob([module], {
+        type: 'text/javascript'
+      }),
+      url = URL.createObjectURL(script),
+      exports = await import(/* @vite-ignore */url) as Promise<IModuleImportObject>
+    ;
+
+    // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
+    delete window[tmpName];
+    URL.revokeObjectURL(url);
+
+    return exports;
+  }
+
   async #loadScopes(): Promise<Record<string, RegisterConfig>> {
     const modules: Record<string, RegisterConfig> = {},
       scopes: Record<string, RegisterConfig> = {}
@@ -151,8 +184,8 @@ export default class Marshal {
   }
 
   #updateTagModules(): void {
-    for (const tagKey in this.#tagMap) {
-      const tags = this.#tagMap[tagKey];
+    for (const tagKey in this.tagMap) {
+      const tags = this.tagMap[tagKey];
       tags.forEach(tag => {
         tag.module = this.get(this.getModuleConstraint(tag.config))!;
       })
@@ -161,19 +194,19 @@ export default class Marshal {
 
   #tagModules(moduleImport: IModuleImport): void {
     (moduleImport.config.tags ?? []).forEach(tag => {
-      if (typeof this.#tagMap[tag] == 'undefined') {
-        this.#tagMap[tag] = [];
+      if (typeof this.tagMap[tag] == 'undefined') {
+        this.tagMap[tag] = [];
       }
 
-      if (this.isESClass((moduleImport.module as IModuleImportObject).default)) {
-        this.#tagMap[tag].push({
+      if (this.#isESClass((moduleImport.module as IModuleImportObject).default)) {
+        this.tagMap[tag].push({
           config: moduleImport.config,
           module: ((moduleImport.module as IModuleImportObject).default! as any) as IModuleImportObject
         });
         return;
       }
 
-      this.#tagMap[tag].push(moduleImport);
+      this.tagMap[tag].push(moduleImport);
     })
   }
 
@@ -185,7 +218,7 @@ export default class Marshal {
     } else {
       mInstance = module;
     }
-    if (!this.isESClass(mInstance)) {
+    if (!this.#isESClass(mInstance)) {
       this.#mapInstance(config, mInstance as Module);
       return mInstance as Module;
     }
@@ -209,11 +242,7 @@ export default class Marshal {
     const constraint = this.getModuleConstraint(config);
     delete this.registered[constraint];
     this.loaded[constraint] = module;
-    this.#instanceMap.set(module, config);
-  }
-
-  getMappedInstance(module: Module): RegisterConfig | undefined {
-    return this.#instanceMap.get(module);
+    this.instanceMap.set(module, config);
   }
 
   #loadDependencies(module: Module, config: RegisterConfig): Record<string, object>|undefined|false {
@@ -225,14 +254,14 @@ export default class Marshal {
       injectList: Record<string, object> = {}
     ;
     for (const name in toInjectList) {
-      if (this.isTag(toInjectList[name])) {
+      if (this.#isTag(toInjectList[name])) {
         // Make sure that we are using the same array for all tags, otherwise if tag was empty we might create
         // different pointers
         const tagName = toInjectList[name].substring(1);
-        if (typeof this.#tagMap[tagName] == 'undefined') {
-          this.#tagMap[tagName] = [];
+        if (typeof this.tagMap[tagName] == 'undefined') {
+          this.tagMap[tagName] = [];
         }
-        injectList[name] = this.#tagMap[tagName];
+        injectList[name] = this.tagMap[tagName];
         continue;
       }
 
@@ -252,7 +281,7 @@ export default class Marshal {
     return injectList;
   }
 
-  isESClass(fn: unknown): boolean {
+  #isESClass(fn: unknown): boolean {
     return typeof fn === 'function'
       && Object.getOwnPropertyDescriptor(
         fn,
@@ -280,7 +309,7 @@ export default class Marshal {
         ;
 
         for (const required of requires) {
-          if (this.isTag(required)) {
+          if (this.#isTag(required)) {
             continue;
           }
 
@@ -315,37 +344,8 @@ export default class Marshal {
     return loadGroups;
   }
 
-  isTag(string: string): boolean {
+  #isTag(string: string): boolean {
     return /^![^\W.].*$/.test(string);
-  }
-
-  async import(source: string, addScope: Record<string, unknown> = {}): Promise<IModuleImportObject> {
-    const tmpName = String(Math.random().toString(36).substring(2)),
-      scope = Object.assign({}, this.scope, addScope)
-    ;
-
-    // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
-    window[tmpName] = scope;
-
-    let variables = '';
-    for (const varName in scope) {
-      variables += 'const ' + varName + ' = window["' + tmpName + '"]["' + varName + '"];';
-    }
-
-    let module = await(await fetch(source)).text();
-    module = variables + module;
-    const script = new Blob([module], {
-        type: 'text/javascript'
-      }),
-      url = URL.createObjectURL(script),
-      exports = await import(/* @vite-ignore */url) as Promise<IModuleImportObject>
-    ;
-
-    // @ts-expect-error TS7015: Element implicitly has an 'any' type because index expression is not of type 'number'.
-    delete window[tmpName];
-    URL.revokeObjectURL(url);
-
-    return exports;
   }
 
   #importModule(config: RegisterConfig): Promise<IModuleImportObject> {

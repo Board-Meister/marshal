@@ -46,6 +46,8 @@ declare class Marshal {
 	registered: Record<string, RegisterConfig>;
 	loaded: Record<string, object>;
 	scope: Record<string, unknown>;
+	tagMap: Record<string, IModuleImport[]>;
+	instanceMap: WeakMap<Module<any>, RegisterConfig>;
 	constructor();
 	addScope(name: string, value: unknown): void;
 	register(config: RegisterConfig): void;
@@ -55,8 +57,6 @@ declare class Marshal {
 	getResourceUrl(module: Module, suffix: string): string;
 	asset(module: Module, suffix: string): string;
 	getMappedInstance(module: Module): RegisterConfig | undefined;
-	isESClass(fn: unknown): boolean;
-	isTag(string: string): boolean;
 	import(source: string, addScope?: Record<string, unknown>): Promise<IModuleImportObject>;
 }
 
