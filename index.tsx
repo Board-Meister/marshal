@@ -350,9 +350,25 @@ export default class Marshal {
 
   #importModule(config: RegisterConfig): Promise<IModuleImportObject> {
     return typeof config.entry.source == 'string'
-      ? this.import(config.entry.source)
+      ? this.import(this.#addCacheBurst(config.entry.source, config))
       : Promise.resolve(config.entry.source) as Promise<IModuleImportObject>
     ;
+  }
+
+  #addCacheBurst(url: string, config: RegisterConfig): string {
+    try {
+      const obj = new URL(url);
+      obj.searchParams.append("bc", config.entry.version);
+
+      return obj.toString();
+
+    } catch (error) {
+      if (url.includes("?")) {
+        return url + "&bc=" + config.entry.version;
+      }
+
+      return url + "?bc=" + config.entry.version;
+    }
   }
 
   async #retrieveModulePromise(config: RegisterConfig): Promise<IModuleImport> {
